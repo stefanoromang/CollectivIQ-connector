@@ -45,26 +45,33 @@ server.tool(
   }
 );
 
-// Health check (for Render)
-app.get("/health", (req, res) => res.json({ status: "ok" }));
+// Simple health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", service: "collectiviq-mcp" });
+});
 
 const transport = new StreamableHTTPServerTransport({
   sessionIdGenerator: undefined,
 });
 
-await server.connect(transport);
+server.connect(transport).then(() => {
+  console.log("✅ MCP server connected");
 
-const mcpHandler = async (req, res) => {
-  await transport.handleRequest(req, res, req.body);
-};
+  const handler = async (req, res) => {
+    await transport.handleRequest(req, res, req.body);
+  };
 
-// Support both root and /mcp
-app.post("/", mcpHandler);
-app.get("/", mcpHandler);
-app.post("/mcp", mcpHandler);
-app.get("/mcp", mcpHandler);
+  // Support both root and /mcp
+  app.post("/", handler);
+  app.get("/", handler);
+  app.post("/mcp", handler);
+  app.get("/mcp", handler);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ Collective IQ MCP server running on port ${PORT}`);
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`✅ Collective IQ MCP server running on port ${PORT}`);
+  });
+}).catch((err) => {
+  console.error("❌ Failed to connect MCP transport:", err);
+  process.exit(1);
 });
