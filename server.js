@@ -15,9 +15,9 @@ const CIQ_TOKEN = "ciq_live_gpmadb2w9Sy8dymaQkTlUQzRufiYTvH0E7emhFrSR8RA";
 
 server.tool(
   "ask_ciq",
-  "Ask Collective IQ (multi-AI consensus engine). Sends your question to multiple top LLMs in parallel and returns a combined smart summary.",
+  "Ask Collective IQ – sends your question to multiple top LLMs in parallel and returns a smart combined summary.",
   {
-    prompt: z.string().describe("The full question or prompt you want to ask Collective IQ"),
+    prompt: z.string().describe("The full question you want answered by multiple AIs"),
   },
   async ({ prompt }) => {
     try {
@@ -31,7 +31,7 @@ server.tool(
         body: form,
       });
 
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const text = await res.text();
 
       return {
@@ -45,33 +45,26 @@ server.tool(
   }
 );
 
-// Simple health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "collectiviq-mcp" });
-});
-
 const transport = new StreamableHTTPServerTransport({
   sessionIdGenerator: undefined,
 });
 
-server.connect(transport).then(() => {
-  console.log("✅ MCP server connected");
+await server.connect(transport);
 
-  const handler = async (req, res) => {
-    await transport.handleRequest(req, res, req.body);
-  };
+const handleMCP = async (req, res) => {
+  await transport.handleRequest(req, res, req.body);
+};
 
-  // Support both root and /mcp
-  app.post("/", handler);
-  app.get("/", handler);
-  app.post("/mcp", handler);
-  app.get("/mcp", handler);
+app.post("/", handleMCP);
+app.get("/", handleMCP);
+app.post("/mcp", handleMCP);
+app.get("/mcp", handleMCP);
 
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`✅ Collective IQ MCP server running on port ${PORT}`);
-  });
-}).catch((err) => {
-  console.error("❌ Failed to connect MCP transport:", err);
-  process.exit(1);
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", service: "collectiviq-mcp" });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Collective IQ MCP server running on port ${PORT}`);
 });
