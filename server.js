@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-const app = express(); 
+const app = express();
 app.use(express.json());
 
 const server = new McpServer({
@@ -27,9 +27,7 @@ server.tool(
 
       const res = await fetch("https://api.prod.collectiviq.ai/process_message", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${CIQ_TOKEN}`,
-        },
+        headers: { "Authorization": `Bearer ${CIQ_TOKEN}` },
         body: form,
       });
 
@@ -47,7 +45,7 @@ server.tool(
   }
 );
 
-// Health check (required by Render)
+// Health check (for Render)
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 const transport = new StreamableHTTPServerTransport({
@@ -56,13 +54,15 @@ const transport = new StreamableHTTPServerTransport({
 
 await server.connect(transport);
 
-app.post("/mcp", async (req, res) => {
+const mcpHandler = async (req, res) => {
   await transport.handleRequest(req, res, req.body);
-});
+};
 
-app.get("/mcp", async (req, res) => {
-  await transport.handleRequest(req, res);
-});
+// Support both root and /mcp
+app.post("/", mcpHandler);
+app.get("/", mcpHandler);
+app.post("/mcp", mcpHandler);
+app.get("/mcp", mcpHandler);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
