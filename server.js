@@ -1,18 +1,70 @@
-const token = "ciq_live_gpmadb2w9Sy8dymaQkTlUQzRufiYTvH0E7emhFrSR8RA";
+import express from "express";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
 
-async function askCIQ(question) {
-  const form = new URLSearchParams();
-  form.append("prompt", question);
-  form.append("generate_combined", "true");
+const app = express();
+app.use(express.json());
 
-  const res = await fetch("https://api.prod.collectiviq.ai/process_message", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${token}` },
-    body: form
-  });
+const server = new McpServer({
+  name: "collectiviq-connector",
+  version: "1.0.0",
+});
 
-  const data = await res.text();
-  return data || "No response from Collective IQ";
-}
+const CIQ_TOKEN = "ciq_live_gpmadb2w9Sy8dymaQkTlUQzRufiYTvH0E7emhFrSR8RA";
 
-export default { askCIQ };
+server.tool(
+  "ask_ciq",
+  "Ask Collective IQ (multi-AI consensus engine). Sends your question to multiple top LLMs in parallel and returns a combined smart summary.",
+  {
+    prompt: z.string().describe("The full question or prompt you want to ask Collective IQ"),
+  },
+  async ({ prompt }) => {
+    try {
+      const form = new URLSearchParams();
+      form.append("prompt", prompt);
+      form.append("generate_combined", "true");
+
+      const res = await fetch("https://api.prod.collectiviq.ai/process_message", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${CIQ_TOKEN}`,
+        },
+        body: form,
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const text = await res.text();
+
+      return {
+        content: [{ type: "text", text: text || "No response from Collective IQ" }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error: ${error.message}` }],
+      };
+    }
+  }
+);
+
+// Health check (required by Render)
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: undefined,
+});
+
+await server.connect(transport);
+
+app.post("/mcp", async (req, res) => {
+  await transport.handleRequest(req, res, req.body);
+});
+
+app.get("/mcp", async (req, res) => {
+  await transport.handleRequest(req, res);
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Collective IQ MCP server running on port ${PORT}`);
+});
